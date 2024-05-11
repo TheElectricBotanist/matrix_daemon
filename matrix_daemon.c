@@ -100,16 +100,16 @@ int main(void)
 	setsid();
 	const char tokenString[2] = " ";
 	char setBrightness[4] = {0x32, 0xAC, 0x00, BRIGHTNESS};
-	volatile char dataPacket[5] = {0x32, 0xAC, 0x01, 0x00, 0};
 	struct timespec remaining, request = { 0, (UPDATE_RATE / 2)};
-	struct sysinfo systemInfo;
-	char procStats[100];
-	char * token;
-	int totalTime;
-	int idleTime = 0;
-	int lastTotal = 0;
-	int lastIdle = 0;
-	int i;
+	volatile char dataPacket[5] = {0x32, 0xAC, 0x01, 0x00, 0};
+	volatile struct sysinfo systemInfo;
+	volatile char procStats[100];
+	volatile char * token;
+	volatile int totalTime;
+	volatile int idleTime = 0;
+	volatile int lastTotal = 0;
+	volatile int lastIdle = 0;
+	volatile int i;
 	int fd_cpu, fd_ram;
 	if(USE_CPU)
 	{
