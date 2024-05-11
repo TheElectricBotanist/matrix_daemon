@@ -133,7 +133,7 @@ int main(void)
 		}
 		set_interface_attribs(fd_ram, B115200, 0);
 		set_blocking(fd_ram, 0);
-		write(fd_cpu, setBrightness, 4);
+		write(fd_ram, setBrightness, 4);
 	}
 	nanosleep(&request, &remaining);
 	do{
