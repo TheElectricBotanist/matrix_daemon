@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <sys/sysinfo.h>
 #include <time.h>
+#include <math.h>
 
 #define BRIGHTNESS 3  // Sets brightness on scale from 0 to 100
 #define UPDATE_RATE 500000000L  // Update rate in ns
@@ -158,7 +159,7 @@ int main(void)
 					i = i + 1;
 				}
 			}
-			dataPacket[4] = 100.0f - (100.0f * ((float)(idleTime - lastIdle) / (float)(totalTime - lastTotal)));
+			dataPacket[4] = round((100.0f - (100.0f * ((float)(idleTime - lastIdle) / (float)(totalTime - lastTotal)))));
 			lastIdle = idleTime;
 			lastTotal = totalTime;
 			write(fd_cpu, dataPacket, 5);
@@ -167,7 +168,7 @@ int main(void)
 		if(USE_RAM)
 		{
 			sysinfo(&systemInfo);
-			dataPacket[4] = 100.0f - (100.0f * ((float)systemInfo.freeram) / ((float)systemInfo.totalram));
+			dataPacket[4] = round((100.0f - (100.0f * ((long double)(systemInfo.freeram + systemInfo.bufferram) / (long double)systemInfo.totalram))));
 			write(fd_ram, dataPacket, 5);
 		}
 		nanosleep(&request, &remaining);
@@ -176,4 +177,3 @@ int main(void)
 	if(USE_RAM) close(fd_ram);
 	return 0;
 }
-
