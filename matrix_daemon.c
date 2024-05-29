@@ -41,7 +41,8 @@
 #define USE_RAM 1  // Display RAM.  Set to 0 to turn off
 
 int set_interface_attribs (int fd, int speed, int parity);
-void set_blocking (int fd, int should_block);
+int set_blocking (int fd, int should_block);
+int initialize_usb(const char * usb_path);
 
 int main(void)
 {
@@ -61,27 +62,15 @@ int main(void)
 	int fd_cpu, fd_ram;
 	if(USE_CPU)
 	{
-		fd_cpu = open(CPU_DISPLAY, O_RDWR | O_NOCTTY | O_SYNC);
-		if (fd_cpu < 0)
-		{
-			// error_message ("error %d opening %s: %s", errno, CPU_DISPLAY, strerror (errno));
-			return -1;
-		}
-		set_interface_attribs(fd_cpu, B115200, 0);
-		set_blocking(fd_cpu, 0);
+		fd_cpu = initialize_usb(CPU_DISPLAY);
 		write(fd_cpu, setBrightness, 4);
+		close(fd_cpu);
 	}
 	if(USE_RAM)
 	{
-		fd_ram = open(RAM_DISPLAY, O_RDWR | O_NOCTTY | O_SYNC);
-		if (fd_ram < 0)
-		{
-			// error_message ("error %d opening %s: %s", errno, RAM_DISPLAY, strerror (errno));
-			return -1;
-		}
-		set_interface_attribs(fd_ram, B115200, 0);
-		set_blocking(fd_ram, 0);
+		fd_ram = initialize_usb(RAM_DISPLAY);
 		write(fd_ram, setBrightness, 4);
+		close(fd_ram);
 	}
 	nanosleep(&request, &remaining);
 	do{
@@ -109,67 +98,91 @@ int main(void)
 			dataPacket[4] = round((100.0f - (100.0f * ((float)(idleTime - lastIdle) / (float)(totalTime - lastTotal)))));
 			lastIdle = idleTime;
 			lastTotal = totalTime;
-			write(fd_cpu, dataPacket, 5);
+			fd_cpu = initialize_usb(CPU_DISPLAY);
+			if(fd_cpu != -1)
+			{
+				write(fd_cpu, dataPacket, 5);
+				close(fd_cpu);
+			}
 		}
 		nanosleep(&request, &remaining);
 		if(USE_RAM)
 		{
 			sysinfo(&systemInfo);
 			dataPacket[4] = round((100.0f - (100.0f * ((long double)(systemInfo.freeram + systemInfo.bufferram) / (long double)systemInfo.totalram))));
-			write(fd_ram, dataPacket, 5);
+			fd_ram = initialize_usb(RAM_DISPLAY);
+			if(fd_ram != -1)
+			{
+				write(fd_ram, dataPacket, 5);
+				close(fd_ram);
+			}
 		}
 		nanosleep(&request, &remaining);
 	}while(1);
-	if(USE_CPU) close(fd_cpu);
-	if(USE_RAM) close(fd_ram);
 	return 0;
 }
 
 int set_interface_attribs (int fd, int speed, int parity)
 {
-        struct termios tty;
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                // error_message ("error %d from tcgetattr", errno);
-                return -1;
-        }
-        cfsetospeed (&tty, speed);
-        cfsetispeed (&tty, speed);
-        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
-        // disable IGNBRK for mismatched speed tests; otherwise receive break
-        // as \000 chars
-        tty.c_iflag &= ~IGNBRK;         // disable break processing
-        tty.c_lflag = 0;                // no signaling chars, no echo,
-										// no canonical processing
-        tty.c_oflag = 0;                // no remapping, no delays
-        tty.c_cc[VMIN]  = 0;            // read doesn't block
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
-        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
-                                        // enable reading
-        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
-        tty.c_cflag |= parity;
-        tty.c_cflag &= ~CSTOPB;
-        tty.c_cflag &= ~CRTSCTS;
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-        {
-                // error_message ("error %d from tcsetattr", errno);
-                return -1;
-        }
-        return 0;
+	struct termios tty;
+	if (tcgetattr (fd, &tty) != 0)
+	{
+		// error_message ("error %d from tcgetattr", errno);
+		return -1;
+	}
+	cfsetospeed (&tty, speed);
+	cfsetispeed (&tty, speed);
+	tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
+	// disable IGNBRK for mismatched speed tests; otherwise receive break
+	// as \000 chars
+	tty.c_iflag &= ~IGNBRK;         // disable break processing
+	tty.c_lflag = 0;                // no signaling chars, no echo,
+									// no canonical processing
+	tty.c_oflag = 0;                // no remapping, no delays
+	tty.c_cc[VMIN]  = 0;            // read doesn't block
+	tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+	tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+	tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
+									// enable reading
+	tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
+	tty.c_cflag |= parity;
+	tty.c_cflag &= ~CSTOPB;
+	tty.c_cflag &= ~CRTSCTS;
+	if (tcsetattr (fd, TCSANOW, &tty) != 0)
+	{
+		// error_message ("error %d from tcsetattr", errno);
+		return -1;
+	}
+	return 0;
 }
 
-void set_blocking (int fd, int should_block)
+int set_blocking (int fd, int should_block)
 {
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                // error_message ("error %d from tggetattr", errno);
-                return;
-        }
-        tty.c_cc[VMIN]  = should_block ? 1 : 0;
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-        // if (tcsetattr (fd, TCSANOW, &tty) != 0)
-                // error_message ("error %d setting term attributes", errno);
+	struct termios tty;
+	memset (&tty, 0, sizeof tty);
+	if (tcgetattr (fd, &tty) != 0)
+	{
+		// error_message ("error %d from tggetattr", errno);
+		return -1;
+	}
+	tty.c_cc[VMIN]  = should_block ? 1 : 0;
+	tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+	// if (tcsetattr (fd, TCSANOW, &tty) != 0)
+			// error_message ("error %d setting term attributes", errno);
+	return 0;
 }
+
+int initialize_usb(const char * usb_path)
+{
+	int fd = open(usb_path, O_RDWR | O_NOCTTY | O_SYNC);
+	if ((fd < 0) || (set_interface_attribs(fd, B115200, 0) == -1) || (set_blocking(fd, 0) == -1))
+	{
+		// error_message ("error %d opening %s: %s", errno, CPU_DISPLAY, strerror (errno));
+		return -1;
+	}
+	else
+	{
+		return fd;
+	}
+}
+
