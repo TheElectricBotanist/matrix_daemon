@@ -1,0 +1,9 @@
+[Unit]
+Desciption=Display CPU and RAM useage via the Framework LED Matrix
+
+[Service]
+ExecStart=/usr/bin/matrix_daemon
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
